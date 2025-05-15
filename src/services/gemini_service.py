@@ -1,12 +1,16 @@
 from google import genai
 from typing import List, Dict
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
 
 
 def generate_data_with_gemini(tables: Dict[str, List[str]], prompt: str, temperature: float) -> List[Dict]:
     client = genai.Client(
-        vertexai=True,
-        project="gd-gcp-internship-ds",
-        location="us-central1"
+        vertexai=os.getenv("USE_VERTEXAI", "False") == "True",
+        project=os.getenv("PROJECT_ID"),
+        location=os.getenv("LOCATION")
     )
     
     tables_desc = "\n".join([
@@ -52,9 +56,9 @@ Additional context: {prompt}
 
 def generate_data_from_prompt(prompt: str, temperature: float) -> str:
     client = genai.Client(
-        vertexai=True,
-        project="gd-gcp-internship-ds",
-        location="us-central1"
+        vertexai=os.getenv("USE_VERTEXAI", "False") == "True",
+        project=os.getenv("PROJECT_ID"),
+        location=os.getenv("LOCATION")
     )
 
     response = client.models.generate_content(
