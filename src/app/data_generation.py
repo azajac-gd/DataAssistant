@@ -4,7 +4,7 @@ import pandas as pd
 from typing import List, Dict
 
 from services.ddl_service import parse_ddl
-from services.gemini_service import generate_data_with_gemini, generate_data_from_prompt
+from services.gemini_service import generate_data_with_gemini, generate_data_from_prompt, build_edit_prompt
 
 
 def show_data_generation():
@@ -67,28 +67,6 @@ def show_tables(data: List[Dict]):
             st.dataframe(df, use_container_width=True, hide_index=True)
             break
 
-
-def build_edit_prompt(current_data: List[Dict], edit_history: List[str], new_instruction: str) -> str:
-    json_data = json.dumps(current_data, indent=2)
-    edit_steps = "\n".join([f"{i+1}. {edit}" for i, edit in enumerate(edit_history)])
-    next_step = f"{len(edit_history) + 1}. {new_instruction}"
-
-    return f"""
-You are a data editor. Below is the current data in JSON format:
-
-{json_data}
-
-Previously applied modifications:
-{edit_steps}
-
-Apply this additional modification:
-{next_step}
-
-Rules:
- - Modify only what is necessary.
- - Return only the updated JSON in the same structure.
- - Previous modifications should be preserved unless additional changes are specified to them.
-"""
 
 def process_edit_prompt(edit_prompt: str, temperature: float):
     previous_data = st.session_state['generated_data']

@@ -13,7 +13,7 @@ def main():
     if selection == "Data Generation":
         show_data_generation()
     elif selection == "Talk to Your Data":
-        st.write("This feature is under construction. Please check back later.")
+        st.write("This feature is under construction.")
 if __name__ == "__main__":
     main()
 
