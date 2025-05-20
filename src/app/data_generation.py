@@ -9,7 +9,7 @@ from services.gemini_service import generate_data_with_gemini, generate_data_fro
 
 def show_data_generation():
     with st.container(border=True):
-        prompt = st.text_input("Prompt", placeholder="Enter your prompt here...")
+        prompt = st.text_area("Prompt", placeholder="Enter your prompt here...")
 
         ddl_file = st.file_uploader("Upload your DDL schema", type=["sql", "ddl", "txt"])
         ddl_content = ddl_file.read().decode("utf-8") if ddl_file else None
@@ -69,18 +69,25 @@ def show_tables(data: List[Dict]):
 
 
 def process_edit_prompt(edit_prompt: str, temperature: float):
-    previous_data = st.session_state['generated_data']
-    previous_prompts = st.session_state.get('edit_prompts', [])
+    full_data = st.session_state['generated_data']
+    edit_history = st.session_state.get('edit_prompts', [])
 
-    full_prompt = build_edit_prompt(previous_data, previous_prompts, edit_prompt)
+    full_prompt = build_edit_prompt(full_data, edit_history, edit_prompt)
     updated_data_str = generate_data_from_prompt(full_prompt, temperature)
+
     parsed_data = parse_json_block(updated_data_str)
 
     if parsed_data:
-        st.session_state['generated_data'] = parsed_data
+        updated_table_names = {table['table_name'] for table in parsed_data}
+        for i, table in enumerate(full_data):
+            if table['table_name'] in updated_table_names:
+                full_data[i] = next(t for t in parsed_data if t['table_name'] == table['table_name'])
+
+        st.session_state['generated_data'] = full_data
         st.session_state['edit_prompts'].append(edit_prompt)
     else:
         st.error("Failed to parse updated data.")
+
 
 
 def parse_json_block(raw: str):
