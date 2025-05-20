@@ -9,7 +9,6 @@ import logging
 
 load_dotenv()
 
-# function calling is not working correctly 
 
 def generate_data_with_gemini(tables: List[Dict], prompt: str, temperature: float) -> str:
     client = genai.Client(
@@ -36,63 +35,64 @@ def generate_data_with_gemini(tables: List[Dict], prompt: str, temperature: floa
     tools = types.Tool(function_declarations=[validate_data_declaration])
     config = types.GenerateContentConfig(tools=[tools], temperature=temperature)
 
-    tables_desc = "\n".join([
-        f"Table '{table['table_name']}': " +
-        ", ".join([f"{col['name']} ({col['type']})" for col in table['columns']])
-        for table in tables
-    ])
+    previously_generated_data = {}
+    all_generated_data = []
+    generated_tables = []
 
-    full_prompt = f"""
-You are a data generator. Given the following table definitions, generate realistic and consistent sample data.
-Return the data as a JSON array in this format:
-[
-  {{
-    "table_name": "<table_name>",
-    "rows": [
-      {{ "col1": "value1", "col2": "value2", ... }},
-      ...
-    ]
-  }},
-  ...
-]
+    for table in tables:
+        table_name = table["table_name"]
+        columns = ", ".join([f"{col['name']} ({col['type']})" for col in table["columns"]])
+
+        # Kontekst do zapewnienia spójności (np. z ID innych tabel)
+        context_json = json.dumps(previously_generated_data, indent=2) if previously_generated_data else "None"
+
+        full_prompt = f"""
+You are a data generator. Your task is to generate realistic and consistent data for the following table:
+Table '{table_name}': {columns}
+
+Use the following previously generated data as reference to maintain consistency (foreign keys, IDs, names, etc.):
+{context_json}
+
 Rules:
-- Each table must contain 5 sample rows unless specified otherwise.
-- The data should be realistic and consistent with the table definitions.
-- Do not create None or empty values in the data unless specified otherwise.
-- Return ONLY valid JSON.
-- Do NOT add explanations, comments, or surrounding text.
-- Ensure the JSON is well-formed and parsable.
-- After generating the JSON sample data, validate it using the "validate_data" function.
+- Generate 15 rows of data for the table unless specified otherwise.
+- Ensure the data is realistic and consistent with the table structure.
+- Ensure all foreign key references are valid and consistent with the reference data.
+- Return ONLY valid JSON in this format:
+{{
+  "table_name": "{table_name}",
+  "rows": [
+    {{ "col1": "value1", "col2": "value2", ... }},
+    ...
+  ]
+}}
 
-Table definitions:
-{tables_desc}
-Additional context: {prompt}
-"""
+Additional context from user: {prompt}
+        """
+        contents = [types.Content(role="user", parts=[types.Part(text=full_prompt)])]
 
-    contents = [
-        types.Content(
-            role="user", parts=[types.Part(text=full_prompt)]
+        response = client.models.generate_content(
+            model="gemini-2.0-flash",
+            contents=contents,
+            config=config
         )
-    ]
+        result = response.candidates[0].content.parts[0].text.strip()
 
-    response = client.models.generate_content(
-        model="gemini-2.0-flash",  
-        contents=contents,
-        config=config
-    )
+        try:
+            if result.startswith("```json"):
+                result = result[len("```json"):].strip()
+            if result.endswith("```"):
+                result = result[:-3].strip()
+            data_json = json.loads(result)
+            all_generated_data.append(data_json)
+            previously_generated_data[table_name] = data_json["rows"]
+        except Exception as e:
+            logging.warning(f"Could not parse table {table_name}: {e}")
+            continue
 
+    final_json= json.dumps(all_generated_data, indent=2)
+        
 
-    candidate = response.candidates[0]
-    function_call = candidate.content.parts[0].function_call
-
-    if function_call:
-        logging.info(f"Function to call: {function_call.name}")
-        logging.info(f"Arguments: {function_call.args}")
-
-        if function_call.name == "validate_data":
-            data_to_validate = function_call.args.get("data", "")
-
-            validation_prompt = f"""
+    validation_prompt = f"""
 You are a data validator. Check if the following JSON data is realistic, internally consistent, and valid given the table structure.
 
 Respond with:
@@ -100,21 +100,21 @@ Respond with:
 - Otherwise, list the problems briefly.
 
 Data:
-{data_to_validate}
+{final_json}
 """
 
-            validation_response = client.models.generate_content(
-                model="gemini-2.0-flash",
-                contents=[types.Content(role="user", parts=[types.Part(text=validation_prompt)])]
-            )
+    validation_response = client.models.generate_content(
+        model="gemini-2.0-flash",
+        contents=[types.Content(role="user", parts=[types.Part(text=validation_prompt)])]
+    )
 
-            result_text = validation_response.candidates[0].content.parts[0].text.strip()
-            logging.info(f"Validation result: {result_text}")
-            return result_text
+    result_text = validation_response.candidates[0].content.parts[0].text.strip()
+    logging.info(f"Validation result: {result_text}")
+    print(f"Validation result: {result_text}")
+    if result_text == "OK":
+        return final_json
     else:
-        logging.info("No function call found in the response.")
-        return candidate.content.parts[0].text.strip()
-
+        return final_json
 
 
 
