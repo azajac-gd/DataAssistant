@@ -1,9 +1,14 @@
 import sys
 import os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-
+import logging
 import streamlit as st
 from data_generation import show_data_generation
+
+logging.basicConfig(
+    level=logging.INFO,  
+    format="%(asctime)s - %(levelname)s - %(message)s"
+)
 
 def main():
     st.set_page_config(layout="wide")

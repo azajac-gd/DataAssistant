@@ -10,22 +10,45 @@ import logging
 load_dotenv()
 
 
-def generate_data_with_gemini(tables: List[Dict], prompt: str, temperature: float) -> str:
-    client = genai.Client(
-        vertexai=os.getenv("USE_VERTEXAI", "False") == "True",
-        project=os.getenv("PROJECT_ID"),
-        location=os.getenv("LOCATION")
+client = genai.Client(
+    vertexai=os.getenv("USE_VERTEXAI", "False") == "True",
+    project=os.getenv("PROJECT_ID"),
+    location=os.getenv("LOCATION")
+)
+
+def validate_data(data: str) -> str:
+    validation_prompt = f"""
+    You are a data validator. 
+    1. Check if the following data is realistic, consistent and valid.
+    2. Check if the data is in valid JSON format.
+    3. Check if the data is consistent with the table structure and relationships.
+
+    Output:
+    - If valid, return "OK".
+    - Otherwise, return only a bullet list of problems found (short descriptions).
+
+    Data:
+    {data}
+    """
+    response = client.models.generate_content(
+        model="gemini-2.0-flash",
+        contents=[types.Content(role="user", parts=[types.Part(text=validation_prompt)])]
     )
+    return response.candidates[0].content.parts[0].text.strip()
+
+
+def generate_data_with_gemini(tables: List[Dict], prompt: str, temperature: float) -> str:
+    logging.info("Generating data with Gemini...")
 
     validate_data_declaration = {
         "name": "validate_data",
-        "description": "Check if the input data is valid and return issues if any",
+        "description": "Validate the data. Check if the input data is valid and return issues if any",
         "parameters": {
             "type": "object",
             "properties": {
                 "data": {
                     "type": "string",
-                    "description": "Raw input data to be validated"
+                    "description": "Input JSON data to be validated"
                 }
             },
             "required": ["data"],
@@ -37,13 +60,11 @@ def generate_data_with_gemini(tables: List[Dict], prompt: str, temperature: floa
 
     previously_generated_data = {}
     all_generated_data = []
-    generated_tables = []
 
     for table in tables:
         table_name = table["table_name"]
         columns = ", ".join([f"{col['name']} ({col['type']})" for col in table["columns"]])
 
-        # Kontekst do zapewnienia spójności (np. z ID innych tabel)
         context_json = json.dumps(previously_generated_data, indent=2) if previously_generated_data else "None"
 
         full_prompt = f"""
@@ -54,10 +75,10 @@ Use the following previously generated data as reference to maintain consistency
 {context_json}
 
 Rules:
-- Generate 15 rows of data for the table unless specified otherwise.
+- Generate 7 rows of data for the table unless specified otherwise.
 - Ensure the data is realistic and consistent with the table structure.
 - Ensure all foreign key references are valid and consistent with the reference data.
-- Return ONLY valid JSON in this format:
+- Return ONLY valid JSON in this format!!:
 {{
   "table_name": "{table_name}",
   "rows": [
@@ -89,33 +110,59 @@ Additional context from user: {prompt}
             logging.warning(f"Could not parse table {table_name}: {e}")
             continue
 
-    final_json= json.dumps(all_generated_data, indent=2)
+    final_json = json.dumps(all_generated_data, indent=2)
         
 
-    validation_prompt = f"""
-You are a data validator. Check if the following JSON data is realistic, internally consistent, and valid given the table structure.
+    tools = types.Tool(function_declarations=[validate_data_declaration])
+    config = types.GenerateContentConfig(tools=[tools])
 
-Respond with:
-- "OK" if the data is valid.
-- Otherwise, list the problems briefly.
+    contents = [
+        types.Content(
+            role="user",
+            parts=[
+                types.Part(text="Validate the following JSON data."),
+                types.Part(text=final_json)
+            ]
+        )
+    ]
 
-Data:
-{final_json}
-"""
 
-    validation_response = client.models.generate_content(
+    response = client.models.generate_content(
         model="gemini-2.0-flash",
-        contents=[types.Content(role="user", parts=[types.Part(text=validation_prompt)])]
+        config=config,
+        contents=contents
     )
+    candidate = response.candidates[0]
 
-    result_text = validation_response.candidates[0].content.parts[0].text.strip()
-    logging.info(f"Validation result: {result_text}")
-    print(f"Validation result: {result_text}")
-    if result_text == "OK":
+    if not candidate.content.parts:
+        logging.warning("Model response has no parts - returning original data.")
         return final_json
+
+    part = candidate.content.parts[0]
+
+    if not hasattr(part, "function_call") or part.function_call is None:
+        logging.info("Model did not call any function – returning original data.")
+        return final_json
+
+    # 4. Jeśli model wywołał funkcję
+    tool_call = part.function_call
+
+    if tool_call.name == "validate_data":
+        try:
+            result = validate_data(**tool_call.args)
+            logging.info(f"Validation result: {result}")
+        except Exception as e:
+            logging.error(f"Error during validation: {e}")
+            return final_json
+
+        if result == "OK":
+            return final_json
+        else:
+            logging.warning(f"Validation issues: {result}")
+            return final_json
     else:
+        logging.info(f"Unexpected function call: {tool_call.name} – returning original data.")
         return final_json
-
 
 
 def generate_data_from_prompt(prompt: str, temperature: float) -> str:
@@ -131,7 +178,6 @@ def generate_data_from_prompt(prompt: str, temperature: float) -> str:
         config={"temperature": temperature}
     )
     return response.text
-
 
 def build_edit_prompt(current_data: List[Dict], edit_history: List[str], new_instruction: str) -> str:
     json_data = json.dumps(current_data, indent=2)
