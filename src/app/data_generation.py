@@ -2,9 +2,13 @@ import streamlit as st
 import json
 import pandas as pd
 from typing import List, Dict
+import io
+import zipfile
+import logging
 
 from services.ddl_service import parse_ddl
-from services.gemini_service import generate_data_with_gemini, generate_data_from_prompt, build_edit_prompt
+from services.gemini_service import generate_data_with_gemini, generate_data_from_prompt, build_edit_prompt, validate_prompt, extract_affected_tables
+
 
 
 def show_data_generation():
@@ -24,20 +28,25 @@ def show_data_generation():
         generate_button = st.button("Generate")
 
     if generate_button:
-        if ddl_content is None:
-            st.error("Please upload a DDL file!")
-            return
-
-        with st.spinner("Generating data..."):
-            tables = parse_ddl(ddl_content)
-            generated_data = generate_data_with_gemini(tables, prompt, temperature)
-            parsed_data = parse_json_block(generated_data)
-
-        if parsed_data:
-            st.session_state['generated_data'] = parsed_data
-            st.session_state['edit_prompts'] = []
+        validation = validate_prompt(prompt)
+        if validation != "OK":
+            st.error(f"Prompt rejected!")
         else:
-            st.error("Failed to parse generated data!")
+            if ddl_content is None:
+                st.error("Please upload a DDL file!")
+                return
+
+            with st.spinner("Generating data..."):
+                tables = parse_ddl(ddl_content)
+                generated_data = generate_data_with_gemini(tables, prompt, temperature)
+                parsed_data = parse_json_block(generated_data)
+
+            if parsed_data:
+                st.session_state['generated_data'] = parsed_data
+                st.session_state['edit_prompts'] = []
+            else:
+                st.error("Failed to parse generated data!")
+
 
     with st.container(border=True):
         if 'generated_data' in st.session_state:
@@ -48,10 +57,33 @@ def show_data_generation():
                 edit_prompt = st.text_input("edit_prompt", placeholder="Enter quick edit instructions...", label_visibility="collapsed")
             with col2:
                 if st.button("Submit", use_container_width=True) and edit_prompt.strip():
-                    with st.spinner("Applying edit..."):
-                        process_edit_prompt(edit_prompt, temperature)
+                    validation = validate_prompt(edit_prompt)
+                    if validation != "OK":
+                        st.error(f"Prompt rejected!")
+                    else:
+                        with st.spinner("Applying edit..."):
+                            process_edit_prompt(edit_prompt, temperature)
+            download_all_tables()
 
+def download_all_tables():
+    zip_buffer = io.BytesIO()
 
+    with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
+        for table in st.session_state["generated_data"]:
+            table_name = table["table_name"]
+            df = pd.DataFrame(table["rows"])
+            csv_io = io.StringIO()
+            df.to_csv(csv_io, index=False)
+            zip_file.writestr(f"{table_name}.csv", csv_io.getvalue())
+
+    zip_buffer.seek(0)
+
+    st.download_button(
+        label="Download all tables",
+        data=zip_buffer,
+        file_name="generated_data.zip",
+        mime="application/zip"
+    )
 
 def show_tables(data: List[Dict]):
     col1, col2 = st.columns(2)
@@ -67,12 +99,15 @@ def show_tables(data: List[Dict]):
             st.dataframe(df, use_container_width=True, hide_index=True)
             break
 
-
 def process_edit_prompt(edit_prompt: str, temperature: float):
     full_data = st.session_state['generated_data']
     edit_history = st.session_state.get('edit_prompts', [])
 
-    full_prompt = build_edit_prompt(full_data, edit_history, edit_prompt)
+    all_table_names = [table["table_name"] for table in full_data]
+    affected_tables = extract_affected_tables(edit_prompt, all_table_names)
+    filtered_data = [table for table in full_data if table["table_name"] in affected_tables]
+    full_prompt = build_edit_prompt(filtered_data, edit_history, edit_prompt)
+
     updated_data_str = generate_data_from_prompt(full_prompt, temperature)
 
     parsed_data = parse_json_block(updated_data_str)
@@ -87,7 +122,6 @@ def process_edit_prompt(edit_prompt: str, temperature: float):
         st.session_state['edit_prompts'].append(edit_prompt)
     else:
         st.error("Failed to parse updated data.")
-
 
 
 def parse_json_block(raw: str):

@@ -9,4 +9,5 @@ Thumbs.db
 .idea/
 *.iml
 notes
+guess_the_number.py
 *.pyc
