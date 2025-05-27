@@ -10,4 +10,5 @@ Thumbs.db
 *.iml
 notes
 guess_the_number.py
+*.ddl
 *.pyc

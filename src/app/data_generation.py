@@ -5,18 +5,21 @@ from typing import List, Dict
 import io
 import zipfile
 import logging
+import psycopg2
 
 from services.ddl_service import parse_ddl
 from services.gemini_service import generate_data_with_gemini, generate_data_from_prompt, build_edit_prompt, validate_prompt, extract_affected_tables
+from services.postgres_service import execute_ddl_and_save_data
 
-
-
+    
 def show_data_generation():
     with st.container(border=True):
         prompt = st.text_area("Prompt", placeholder="Enter your prompt here...")
 
         ddl_file = st.file_uploader("Upload your DDL schema", type=["sql", "ddl", "txt"])
-        ddl_content = ddl_file.read().decode("utf-8") if ddl_file else None
+        if ddl_file:
+            ddl_content = ddl_file.read().decode("utf-8")
+            st.session_state.ddl_schema = ddl_content  
 
         st.markdown("**Advanced Parameters**")
         col1, col2 = st.columns(2)
@@ -37,8 +40,7 @@ def show_data_generation():
                 return
 
             with st.spinner("Generating data..."):
-                tables = parse_ddl(ddl_content)
-                generated_data = generate_data_with_gemini(tables, prompt, temperature)
+                generated_data = generate_data_with_gemini(ddl_content, prompt, temperature)
                 parsed_data = parse_json_block(generated_data)
 
             if parsed_data:
@@ -64,6 +66,12 @@ def show_data_generation():
                         with st.spinner("Applying edit..."):
                             process_edit_prompt(edit_prompt, temperature)
             download_all_tables()
+            if st.button("Save to PostgreSQL"):
+                try:
+                    execute_ddl_and_save_data(ddl_content, st.session_state['generated_data'])
+
+                except Exception as e:
+                    st.error(f"Error saving to PostgreSQL: {e}")
 
 def download_all_tables():
     zip_buffer = io.BytesIO()
@@ -134,3 +142,7 @@ def parse_json_block(raw: str):
     except Exception as e:
         st.error(f"JSON parsing error: {e}")
         return None
+
+
+
+

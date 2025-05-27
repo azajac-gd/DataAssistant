@@ -4,6 +4,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 import logging
 import streamlit as st
 from data_generation import show_data_generation
+from talk_to_data import show_talk_to_data
 
 logging.basicConfig(
     level=logging.INFO,  
@@ -18,7 +19,7 @@ def main():
     if selection == "Data Generation":
         show_data_generation()
     elif selection == "Talk to Your Data":
-        st.write("This feature is under construction.")
+        show_talk_to_data()
 if __name__ == "__main__":
     main()
 

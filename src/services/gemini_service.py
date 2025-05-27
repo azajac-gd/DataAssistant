@@ -16,15 +16,9 @@ client = genai.Client(
     location=os.getenv("LOCATION")
 )
 
-def generate_data_with_gemini(tables: List[Dict], prompt: str, temperature: float) -> str:
-    tables_desc = "\n".join([
-        f"Table '{table['table_name']}': " +
-        ", ".join([f"{col['name']} ({col['type']})" for col in table['columns']])
-        for table in tables
-    ])
-
+def generate_data_with_gemini(ddl_schema: str, prompt: str, temperature: float) -> str:
     full_prompt = f"""
-You are a data generator. Given the following table definitions, generate realistic and consistent sample data.
+You are a data generator. Given the following ddl schema, generate realistic and consistent sample data.
 Return the data as a JSON array in this format:
 [
   {{
@@ -41,8 +35,8 @@ Rules:
 - The data should be realistic and consistent with the table definitions.
 - Do not create None or empty values in the data unless specified otherwise.
 
-Table definitions:
-{tables_desc}
+DDL schema:
+{ddl_schema}
 
 Additional context: {prompt}
 """
@@ -174,3 +168,39 @@ User prompt to validate:
     if result not in ["OK", "REJECTED"]:
         return "REJECTED"
     return result
+
+
+def generate_sql(ddl_schema: str, input_query: str) -> str:
+    prompt = f"""
+    You are a professional SQL generator. Your task is to generate a valid, executable PostgreSQL query based strictly on the given schema and the user's natural language request.
+
+    Schema:
+    {ddl_schema}
+
+    User request:
+    \"{input_query}\"
+
+    Guidelines:
+    - Output only a valid SQL query.
+    - Do NOT include markdown formatting like ```sql or ``` at any time.
+    - Do NOT include any explanations, comments, or extra text.
+    - The result must be directly executable in PostgreSQL.
+
+    Your output should be a single SQL query, nothing else.
+    """
+
+    response = client.models.generate_content(
+        model="gemini-2.0-flash",
+        contents=prompt,
+        config={
+            "temperature": 0.0
+        }
+    )
+    raw = response.text.strip()
+
+    if raw.startswith("```sql"):
+        raw = raw.removeprefix("```sql").strip()
+    if raw.endswith("```"):
+        raw = raw.removesuffix("```").strip()
+
+    return raw
