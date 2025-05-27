@@ -21,8 +21,10 @@ def execute_ddl_and_save_data(ddl_text: str, data_tables: List[Dict]):
             password=os.getenv("PASSWORD")
         )
         cursor = conn.cursor()
+        remove_existing_tables(cursor, conn)
         ddl_postgres = convert_mysql_to_postgres(ddl_text, use_pg_enums=True)
         ddl_cleaned = convert_with_cycle_support(ddl_postgres)
+        logging.info(f"Executing DDL: {ddl_cleaned}")
         cursor.execute(ddl_cleaned)
 
         for table in data_tables:
@@ -50,6 +52,25 @@ def execute_ddl_and_save_data(ddl_text: str, data_tables: List[Dict]):
     except Exception as e:
         st.error(f"Error: {e}")
 
+# Remove also types !!!
+def remove_existing_tables(cursor, conn):
+    try:
+        cursor.execute("""
+            DO $$
+            DECLARE
+                r RECORD;
+            BEGIN
+                FOR r IN (SELECT tablename FROM pg_tables WHERE schemaname = 'public') LOOP
+                    EXECUTE format('DROP TABLE IF EXISTS %I CASCADE', r.tablename);
+                END LOOP;
+                FOR r IN (SELECT typname FROM pg_type WHERE typnamespace = 'public'::regnamespace AND typtype = 'e') LOOP
+                    EXECUTE format('DROP TYPE IF EXISTS %I CASCADE', r.typname);
+                END LOOP;
+            END $$;
+        """)
+        conn.commit()
+    except Exception as e:
+        st.error(f"Error removing existing tables: {e}")
 
 def convert_enum_to_pgtype(enum_sql: str) -> Tuple[str, List[str]]:
     enums = []
