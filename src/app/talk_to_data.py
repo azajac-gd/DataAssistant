@@ -5,6 +5,9 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 import logging
+from services.gemini_service import model_response
+import base64
+import pickle
 
 
 def show_talk_to_data():
@@ -25,10 +28,19 @@ def chat_container(ddl_schema: str):
             if message["role"] == "user":
                 st.markdown(message["content"])
             elif message["role"] == "assistant":
-                sql_code, df_html = message["content"]
-                st.code(sql_code, language="sql")
-                logging.info(f"DataFrame: {df_html}")
-                st.markdown(df_html, unsafe_allow_html=True)
+                if "sql" in message:
+                    st.code(message["sql"], language="sql")
+
+                if "df" in message:
+                    try:
+                        df = pickle.loads(base64.b64decode(message["df"]))
+                        st.dataframe(df, use_container_width=False)
+                    except Exception as e:
+                        st.warning(f"Could not load previous DataFrame: {e}")
+
+                if "plot_image" in message:
+                    st.image(message["plot_image"], caption="Generated Plot")
+
 
     if prompt := st.chat_input("Ask a question about your data?"):
         with st.chat_message("user"):
@@ -36,26 +48,30 @@ def chat_container(ddl_schema: str):
         st.session_state.messages.append({"role": "user", "content": prompt})
 
         try:
-            sql_query, df = sql_generation(prompt, ddl_schema)
+            response = model_response(ddl_schema, prompt)
 
             with st.chat_message("assistant"):
-                st.code(sql_query, language="sql")
+                assistant_msg = {"role": "assistant"}
 
-                if df.empty:
-                    st.warning("Query returned no results.")
+                if isinstance(response, tuple) and len(response) == 2:
+                    sql_query, df = response
+
+                    st.code(sql_query, language="sql")
+                    assistant_msg["sql"] = sql_query
+
+                    if not df.empty:
+                        st.dataframe(df, use_container_width=False)
+                        df = base64.b64encode(pickle.dumps(df)).decode("utf-8")
+                        assistant_msg["df"] = df
+
+                    else:
+                        st.warning("Query returned no results.")
+
                 else:
-                    st.dataframe(df)
-            st.session_state.messages.append({
-                "role": "assistant",
-                "content": [sql_query, df.to_html(index=False, escape=False)]
-            })
+                    st.write(response)
+
+                st.session_state.messages.append(assistant_msg)
 
         except Exception as e:
             st.error(f"Error: {e}")
 
-
-
-def sql_generation(user_query:str, ddl_schema:str) -> str:
-    sql_request = generate_sql(ddl_schema, user_query)
-    df = execute_sql(sql_request)
-    return sql_request, df

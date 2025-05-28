@@ -231,9 +231,7 @@ def get_engine():
     return create_engine(f"postgresql+psycopg2://{user}:{password}@{host}/{database}")
 
 def execute_sql(query: str) -> pd.DataFrame:
-    logging.info("Connecting to PostgreSQL database...")
     engine = get_engine()
-    logging.info(f"Executing SQL query: {query}")
     with engine.connect() as conn:
         return pd.read_sql_query(query, conn)
 

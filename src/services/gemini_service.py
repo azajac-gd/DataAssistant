@@ -6,6 +6,8 @@ import json
 from google.genai import types
 import logging
 import streamlit as st
+from services.postgres_service import execute_sql
+from google.genai.types import ToolConfig, FunctionCallingConfig
 
 load_dotenv()
 
@@ -204,3 +206,107 @@ def generate_sql(ddl_schema: str, input_query: str) -> str:
         raw = raw.removesuffix("```").strip()
 
     return raw
+
+
+def sql_generation(ddl_schema: str, user_query: str) -> dict:
+    sql_query = generate_sql(ddl_schema, user_query) 
+    result_df = execute_sql(sql_query)
+    return sql_query, result_df
+
+sql_generation_declaration={
+        "name": "sql_generation",
+        "description": "Generate and run SQL query from user input",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "ddl_schema": {
+                    "type": "string",
+                    "description": "The DDL schema of the database."
+                },
+                "user_query": {
+                    "type": "string",
+                    "description": "The user's natural language question about the data."
+                }
+            },
+            "required": ["ddl_schema", "user_query"]
+        }
+    }
+
+plot_generation_declaration = {
+        "name": "generate_plot",
+        "description": "Generate a data visualization based on user request and a SQL query result.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "plot_type": {
+                    "type": "string",
+                    "description": "Type of plot to create, e.g. bar, line, scatter."
+                },
+                "x_column": {
+                    "type": "string",
+                    "description": "Column to use for X axis."
+                },
+                "y_column": {
+                    "type": "string",
+                    "description": "Column to use for Y axis."
+                },
+                "data": {
+                    "type": "array",
+                    "items": {"type": "object"},
+                    "description": "The dataset to use, provided as an array of records."
+                }
+            },
+            "required": ["plot_type", "x_column", "y_column", "data"]
+        }
+}
+
+
+def model_response(ddl_schema: str, user_query: str):
+    tools = types.Tool(function_declarations=[sql_generation_declaration, plot_generation_declaration])
+    config = types.GenerateContentConfig(
+        temperature=0.0,
+        system_instruction="""You are a data assistant that uses tools. 
+        Based on the user's question, you can either:
+        1. Generate and run SQL query from user input.
+        2. Generate a data visualization based on user request.
+        
+        You must choose one of these tools to answer the user's question.
+        Do not respond with conversational text.""",
+        tools=[tools],
+        tool_config= {"function_calling_config": {"mode": "any"}})
+
+    contents = [
+        types.Content(
+            role="user", parts=[types.Part(text=f"User question: {user_query}")]
+        )
+    ]
+
+    response = client.models.generate_content(
+        model="gemini-2.0-flash", config=config, contents=contents
+    )
+
+
+    tool_call = response.candidates[0].content.parts[0].function_call
+    if tool_call is None:
+        return "Model did not choose any tool."
+
+    name = tool_call.name
+    args = tool_call.args
+
+    if name == "sql_generation":
+        return sql_generation(ddl_schema, user_query)
+    elif name == "generate_plot":
+        return render_plot(
+            plot_type=args["plot_type"],
+            x_column=args["x_column"],
+            y_column=args["y_column"],
+            data=args["data"]
+        )
+    if tool_call is None:
+        return None
+    else:
+        if tool_call.name == "sql_generation":
+            return sql_generation(ddl_schema, user_query)
+
+def render_plot(plot_type: str, x_column: str, y_column: str, data: List[Dict]) -> str:
+    return "The plot generation feature is not implemented yet."
