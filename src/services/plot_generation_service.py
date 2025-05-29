@@ -1,5 +1,6 @@
 from services.gemini_client import client
 import logging
+import seaborn as sns
 
 
 def plot_generator(user_query: str, ddl_schema: str) -> dict:

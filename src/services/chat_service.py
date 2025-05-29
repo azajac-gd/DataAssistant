@@ -39,6 +39,4 @@ def chat_response(ddl_schema: str, user_query: str):
         return sql_generation(ddl_schema, user_query)
     elif name == "plot_generator":
         return plot_generator(user_query, ddl_schema)
-    else:
-        return None
 
