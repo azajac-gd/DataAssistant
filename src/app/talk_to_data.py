@@ -34,7 +34,7 @@ def chat_container(ddl_schema: str):
                         st.warning(f"Could not load previous DataFrame: {e}")
 
                 if "plot_image" in message:
-                    st.image(message["plot_image"], caption="Generated Plot")
+                    st.image(message["plot_image"])
 
 
     if prompt := st.chat_input("Ask a question about your data?"):
@@ -63,7 +63,8 @@ def chat_container(ddl_schema: str):
                         st.warning("Query returned no results.")
 
                 else:
-                    st.write(response)
+                    st.image(response)
+                    assistant_msg["plot_image"] = response
 
                 st.session_state.messages.append(assistant_msg)
 

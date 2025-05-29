@@ -233,11 +233,14 @@ def execute_sql(query: str) -> tuple[pd.DataFrame | None, str | None]:
     engine = get_engine()
     try:
         with engine.connect() as conn:
-            df = pd.read_sql_query(query, conn)
-            logging.info("Lack of errors in SQL execution")
-            return df, None
+            try:
+                df = pd.read_sql_query(query, conn)
+                logging.info("Lack of errors in SQL execution")
+                return df, None
+            except Exception as e:
+                logging.error(f"Error during SQL query execution: {e}")
+                return None, str(e)
     except SQLAlchemyError as e:
-        logging.error(f"SQL execution error: {e}")
         return None, str(e)
 
 

@@ -19,7 +19,7 @@ Return the data as a JSON array in this format:
 Rules:
 - Each table must contain 7 sample rows unless specified otherwise.
 - The data should be realistic and consistent with the table definitions.
-- Do not create None or empty values in the data unless specified otherwise.
+- Make sure that primary keys and foreign keys are consistent and relations between tables are correct!
 
 DDL schema:
 {ddl_schema}
