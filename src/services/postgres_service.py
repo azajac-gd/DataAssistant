@@ -7,8 +7,8 @@ from collections import defaultdict, deque
 from dotenv import load_dotenv
 import re
 from sqlalchemy import create_engine
+from sqlalchemy.exc import SQLAlchemyError
 import logging
-from sqlglot import transpile
 
 load_dotenv()
 
@@ -24,7 +24,6 @@ def execute_ddl_and_save_data(ddl_text: str, data_tables: List[Dict]):
         remove_existing_tables(cursor, conn)
         ddl_postgres = convert_mysql_to_postgres(ddl_text, use_pg_enums=True)
         ddl_cleaned = convert_with_cycle_support(ddl_postgres)
-        logging.info(f"Executing DDL: {ddl_cleaned}")
         cursor.execute(ddl_cleaned)
 
         for table in data_tables:
@@ -52,7 +51,6 @@ def execute_ddl_and_save_data(ddl_text: str, data_tables: List[Dict]):
     except Exception as e:
         st.error(f"Error: {e}")
 
-# Remove also types !!!
 def remove_existing_tables(cursor, conn):
     try:
         cursor.execute("""
@@ -230,9 +228,16 @@ def get_engine():
 
     return create_engine(f"postgresql+psycopg2://{user}:{password}@{host}/{database}")
 
-def execute_sql(query: str) -> pd.DataFrame:
+
+def execute_sql(query: str) -> tuple[pd.DataFrame | None, str | None]:
     engine = get_engine()
-    with engine.connect() as conn:
-        return pd.read_sql_query(query, conn)
+    try:
+        with engine.connect() as conn:
+            df = pd.read_sql_query(query, conn)
+            logging.info("Lack of errors in SQL execution")
+            return df, None
+    except SQLAlchemyError as e:
+        logging.error(f"SQL execution error: {e}")
+        return None, str(e)
 
 

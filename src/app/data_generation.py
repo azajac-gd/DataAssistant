@@ -5,11 +5,11 @@ from typing import List, Dict
 import io
 import zipfile
 import logging
-import psycopg2
 
-from services.ddl_service import parse_ddl
-from services.gemini_service import generate_data_with_gemini, generate_data_from_prompt, build_edit_prompt, validate_prompt, extract_affected_tables
+from services.data_generation_service import generate_data_with_gemini, build_edit_prompt, generate_data_from_prompt
 from services.postgres_service import execute_ddl_and_save_data
+from services.validation_service import validate_prompt, extract_affected_tables
+
 
     
 def show_data_generation():
@@ -64,7 +64,7 @@ def show_data_generation():
                         st.error(f"Prompt rejected!")
                     else:
                         with st.spinner("Applying edit..."):
-                            process_edit_prompt(edit_prompt, temperature)
+                            process_edit_prompt(edit_prompt, temperature, ddl_content)
             download_all_tables()
             if st.button("Save to PostgreSQL"):
                 try:
@@ -107,14 +107,14 @@ def show_tables(data: List[Dict]):
             st.dataframe(df, use_container_width=True, hide_index=True)
             break
 
-def process_edit_prompt(edit_prompt: str, temperature: float):
+def process_edit_prompt(edit_prompt: str, temperature: float, ddl_schema: str):
     full_data = st.session_state['generated_data']
     edit_history = st.session_state.get('edit_prompts', [])
 
     all_table_names = [table["table_name"] for table in full_data]
     affected_tables = extract_affected_tables(edit_prompt, all_table_names)
     filtered_data = [table for table in full_data if table["table_name"] in affected_tables]
-    full_prompt = build_edit_prompt(filtered_data, edit_history, edit_prompt)
+    full_prompt = build_edit_prompt(filtered_data, edit_history, edit_prompt, ddl_schema)
 
     updated_data_str = generate_data_from_prompt(full_prompt, temperature)
 

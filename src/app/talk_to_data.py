@@ -1,11 +1,6 @@
 import streamlit as st
-from services.gemini_service import generate_sql
-from services.postgres_service import execute_sql
-import pandas as pd
-import matplotlib.pyplot as plt
-import seaborn as sns
 import logging
-from services.gemini_service import model_response
+from services.chat_service import chat_response
 import base64
 import pickle
 
@@ -48,7 +43,7 @@ def chat_container(ddl_schema: str):
         st.session_state.messages.append({"role": "user", "content": prompt})
 
         try:
-            response = model_response(ddl_schema, prompt)
+            response = chat_response(ddl_schema, prompt)
 
             with st.chat_message("assistant"):
                 assistant_msg = {"role": "assistant"}
