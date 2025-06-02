@@ -66,8 +66,6 @@ def generate_code_for_plot(user_query: str, ddl_schema: str, df: str, error: str
         Guidelines:
         - Output only valid Python code for generating a plot.
         - Do NOT include any lines with connection to database or SQL code, you have given dataframe as 'df'
-        - Do NOT include markdown formatting like ```python or ``` at any time.
-        - Do NOT include any explanations, comments, or extra text.
         - The result must be directly executable in Python.
 
         Your output should be a single Python code block, nothing else.

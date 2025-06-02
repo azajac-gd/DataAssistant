@@ -17,7 +17,7 @@ Return the data as a JSON array in this format:
   ...
 ]
 Rules:
-- Each table must contain 7 sample rows unless specified otherwise.
+- Each table must contain 15 sample rows unless specified otherwise.
 - The data should be realistic and consistent with the table definitions.
 - Make sure that primary keys and foreign keys are consistent and relations between tables are correct!
 
@@ -28,10 +28,39 @@ Additional context: {prompt}
 """
 
     response = client.models.generate_content(
-        model="gemini-2.0-flash",
+        model="gemini-2.5-flash-preview-05-20",
         contents=full_prompt,
         config={
             "temperature": temperature
+        }
+    )
+
+    return response.text
+
+def validate_generated_data(ddl_schema: str, generated_data: str):
+    prompt = f"""
+You are a data validator. 
+Rules:
+- Each table must contain 15 sample rows unless specified otherwise.
+- The data should be realistic and consistent with the table definitions.
+- Check if primary keys and foreign keys are consistent and relations between tables are correct!
+
+Return:
+- 'OK' if validated data are correct
+- Description what is wrong and what has to be changed
+
+DDL Schema:
+{ddl_schema}
+
+Data to validate:
+{generated_data}
+
+"""
+    response = client.models.generate_content(
+        model="gemini-2.0-flash",
+        contents=prompt,
+        config={
+            "temperature": 0.0
         }
     )
 

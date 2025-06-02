@@ -6,7 +6,7 @@ import io
 import zipfile
 import logging
 
-from services.data_generation_service import generate_data_with_gemini, build_edit_prompt, generate_data_from_prompt
+from services.data_generation_service import generate_data_with_gemini, build_edit_prompt, generate_data_from_prompt, validate_generated_data
 from services.postgres_service import execute_ddl_and_save_data
 from services.validation_service import validate_prompt, extract_affected_tables
 
@@ -40,7 +40,10 @@ def show_data_generation():
                 return
 
             with st.spinner("Generating data..."):
+                logging.info("Generating data...")
                 generated_data = generate_data_with_gemini(ddl_content, prompt, temperature)
+                checked_data = validate_generated_data(ddl_content, generated_data)
+                logging.info(f"Validation result: {checked_data}")
                 parsed_data = parse_json_block(generated_data)
 
             if parsed_data:
