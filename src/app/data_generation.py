@@ -9,9 +9,11 @@ import logging
 from services.data_generation_service import generate_data_with_gemini, build_edit_prompt, generate_data_from_prompt, validate_generated_data
 from services.postgres_service import execute_ddl_and_save_data
 from services.validation_service import validate_prompt, extract_affected_tables
+from langfuse.decorators import observe
+from dotenv import load_dotenv
+load_dotenv()
 
 
-    
 def show_data_generation():
     with st.container(border=True):
         prompt = st.text_area("Prompt", placeholder="Enter your prompt here...")

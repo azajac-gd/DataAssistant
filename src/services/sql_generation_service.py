@@ -1,8 +1,12 @@
 from services.postgres_service import execute_sql
 from services.gemini_client import client
+from google.genai import types
+from langfuse.decorators import observe, langfuse_context
+from dotenv import load_dotenv
+load_dotenv()
 
-
-def generate_sql(ddl_schema: str, input_query: str, error: str) -> str:
+@observe(as_type="generation")
+def generate_sql(ddl_schema: str, input_query: str, error: str, messages: str) -> str:
     if error != 'first run':
         prompt = f"""
         You previously generated an invalid SQL query with the following error: {error}
@@ -36,13 +40,29 @@ def generate_sql(ddl_schema: str, input_query: str, error: str) -> str:
         Your output should be a single SQL query, nothing else.
         """
 
+    gemini_messages = []
+    for message in messages:
+        if "role" in message and "content" in message:
+            gemini_messages.append(
+                types.Content(role=message["role"], parts=[types.Part(text=message["content"])])
+            )
+    gemini_messages.append(types.Content(role="user", parts=[types.Part(text=prompt)]))
+    model = "gemini-2.0-flash"
     response = client.models.generate_content(
-        model="gemini-2.0-flash",
-        contents=prompt,
+        model=model,
+        contents=gemini_messages,
         config={
             "temperature": 0.0
         }
     )
+    langfuse_context.update_current_observation(
+    input=input,
+    model=model,
+    usage_details={
+          "input": response.usage_metadata.prompt_token_count,
+          "output": response.usage_metadata.candidates_token_count,
+          "total": response.usage_metadata.total_token_count
+      })
     raw = response.text.strip()
 
     if raw.startswith("```sql"):
@@ -52,11 +72,10 @@ def generate_sql(ddl_schema: str, input_query: str, error: str) -> str:
 
     return raw
 
-
-def sql_generation(ddl_schema: str, user_query: str) -> dict:
+def sql_generation(ddl_schema: str, user_query: str, messages: str) -> dict:
     error = 'first run'
     while error:
-        sql_query = generate_sql(ddl_schema, user_query, error) 
+        sql_query = generate_sql(ddl_schema, user_query, error, messages) 
         result_df, error = execute_sql(sql_query)
     return sql_query, result_df
 

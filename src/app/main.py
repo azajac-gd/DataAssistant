@@ -5,6 +5,9 @@ import logging
 import streamlit as st
 from data_generation import show_data_generation
 from talk_to_data import show_talk_to_data
+from langfuse.decorators import observe
+from dotenv import load_dotenv
+load_dotenv()
 
 logging.basicConfig(
     level=logging.INFO,  
@@ -20,6 +23,7 @@ def main():
         show_data_generation()
     elif selection == "Talk to Your Data":
         show_talk_to_data()
+
 if __name__ == "__main__":
     main()
 

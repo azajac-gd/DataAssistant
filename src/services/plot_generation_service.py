@@ -7,13 +7,18 @@ import pandas as pd
 import uuid
 import os
 import traceback
+from google.genai import types
+from langfuse.decorators import observe
+from dotenv import load_dotenv
+load_dotenv()
 
-def plot_generator(user_query: str, ddl_schema: str) -> dict:
+
+def plot_generator(user_query: str, ddl_schema: str, messages:str) -> dict:
     error = 'first run'
     while error:
-        sql_query, df = sql_generation(ddl_schema, user_query)
+        sql_query, df = sql_generation(ddl_schema, user_query, messages)
         logging.info(f"Dataframe: {df}")
-        plot_request = generate_code_for_plot(user_query, ddl_schema, df, error)
+        plot_request = generate_code_for_plot(user_query, ddl_schema, df, error, messages)
         logging.info(f"Code {plot_request}")
         plot_path, error = execute_plot(plot_request, df)
         logging.info(plot_path)
@@ -35,7 +40,8 @@ plot_generation_declaration = {
         }
 }
 
-def generate_code_for_plot(user_query: str, ddl_schema: str, df: str, error: str) -> str:
+@observe()
+def generate_code_for_plot(user_query: str, ddl_schema: str, df: str, error: str, messages: str) -> str:
     if error != 'first run':
         prompt = f"""
         You previously generated an invalid plot code with the following error: {error}
@@ -44,8 +50,6 @@ def generate_code_for_plot(user_query: str, ddl_schema: str, df: str, error: str
 
         Guidelines:
         - Output only valid Python code for generating a plot.
-        - Do NOT include markdown formatting like ```python or ``` at any time.
-        - Do NOT include any explanations, comments, or extra text.
         - The result must be directly executable in Python.
 
         Your output should be a single Python code block, nothing else.
@@ -65,15 +69,23 @@ def generate_code_for_plot(user_query: str, ddl_schema: str, df: str, error: str
 
         Guidelines:
         - Output only valid Python code for generating a plot.
-        - Do NOT include any lines with connection to database or SQL code, you have given dataframe as 'df'
+        - Do NOT include any lines with connection to database or SQL code, you have given dataframe as 'df'.
         - The result must be directly executable in Python.
+        - If you'are asked to change something, use your previous answear and change only necessery.
 
         Your output should be a single Python code block, nothing else.
         """
+    gemini_messages = []
+    for message in messages:
+        if "role" in message and "content" in message:
+            gemini_messages.append(
+                types.Content(role=message["role"], parts=[types.Part(text=message["content"])])
+            )
+    gemini_messages.append(types.Content(role="user", parts=[types.Part(text=prompt)]))
 
     response = client.models.generate_content(
         model="gemini-2.0-flash",
-        contents=prompt,
+        contents=gemini_messages,
         config={
             "temperature": 0.0
         }

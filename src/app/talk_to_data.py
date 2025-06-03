@@ -43,7 +43,7 @@ def chat_container(ddl_schema: str):
         st.session_state.messages.append({"role": "user", "content": prompt})
 
         try:
-            response = chat_response(ddl_schema, prompt)
+            response = chat_response(ddl_schema, prompt, st.session_state.messages)
 
             with st.chat_message("assistant"):
                 assistant_msg = {"role": "assistant"}

@@ -3,7 +3,12 @@ from services.sql_generation_service import sql_generation, sql_generation_decla
 from services.plot_generation_service import plot_generator, plot_generation_declaration
 from google.genai import types
 
-def chat_response(ddl_schema: str, user_query: str):
+from langfuse.decorators import observe
+from dotenv import load_dotenv
+load_dotenv()
+
+@observe()
+def chat_response(ddl_schema: str, user_query: str, messages: str):
     tools = types.Tool(function_declarations=[sql_generation_declaration, plot_generation_declaration])
     config = types.GenerateContentConfig(
         temperature=0.0,
@@ -16,7 +21,7 @@ def chat_response(ddl_schema: str, user_query: str):
         Do not respond with conversational text.""",
         tools=[tools],
         tool_config= {"function_calling_config": {"mode": "any"}})
-
+    
     contents = [
         types.Content(
             role="user", parts=[types.Part(text=f"User question: {user_query}")]
@@ -36,7 +41,7 @@ def chat_response(ddl_schema: str, user_query: str):
     args = tool_call.args
 
     if name == "sql_generation":
-        return sql_generation(ddl_schema, user_query)
+        return sql_generation(ddl_schema, user_query, messages)
     elif name == "plot_generator":
-        return plot_generator(user_query, ddl_schema)
+        return plot_generator(user_query, ddl_schema, messages)
 
