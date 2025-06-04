@@ -7,7 +7,7 @@ from langfuse.decorators import observe, langfuse_context
 from dotenv import load_dotenv
 load_dotenv()
 
-@observe(as_type="generation")
+@observe()
 def chat_response(ddl_schema: str, user_query: str, messages: str):
     tools = types.Tool(function_declarations=[sql_generation_declaration, plot_generation_declaration])
     config = types.GenerateContentConfig(
@@ -15,7 +15,7 @@ def chat_response(ddl_schema: str, user_query: str, messages: str):
         system_instruction="""You are a data assistant that uses tools. 
         Based on the user's question, you can either:
         1. Generate and run SQL query from user input.
-        2. Generate and run a data visualization based on user request.
+        2. Generate data visualization based on user request or add changes to the previous generated plot.
         
         You must choose one of these tools to answer the user's question.
         Do not respond with conversational text.""",
@@ -31,15 +31,6 @@ def chat_response(ddl_schema: str, user_query: str, messages: str):
     response = client.models.generate_content(
         model=model, config=config, contents=contents
     )
-    
-    langfuse_context.update_current_observation(
-    input=input,
-    model=model,
-    usage_details={
-          "input": response.usage_metadata.prompt_token_count,
-          "output": response.usage_metadata.candidates_token_count,
-          "total": response.usage_metadata.total_token_count
-      })
 
     tool_call = response.candidates[0].content.parts[0].function_call
     if tool_call is None:

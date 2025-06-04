@@ -7,7 +7,7 @@ load_dotenv()
 
 @observe(as_type="generation")
 def generate_sql(ddl_schema: str, input_query: str, error: str, messages: str) -> str:
-    if error != 'first run':
+    if error != 'first run' and error is not None:
         prompt = f"""
         You previously generated an invalid SQL query with the following error: {error}
         Please correct it based on the schema: {ddl_schema}

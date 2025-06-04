@@ -27,7 +27,7 @@ def plot_generator(user_query: str, ddl_schema: str, messages:str) -> dict:
 
 plot_generation_declaration = {
         "name": "plot_generator",
-        "description": "Generate and run a data visualization based on user request",
+        "description": "Generate data visualization and plots based on user request or add changes to the previous generated plot",
         "parameters": {
             "type": "object",
             "properties": {
@@ -56,7 +56,7 @@ def generate_code_for_plot(user_query: str, ddl_schema: str, df: str, error: str
         """
     else:
         prompt = f"""
-        You are a professional code generator. Your task is to generate valid Python code for creating a plot based on the given schema and the user's natural language request.
+        You are a professional code generator. Your task is to generate valid Python code using Seaborn library for creating a plot based on the given schema and the user's natural language request.
 
         Schema:
         {ddl_schema}
@@ -66,14 +66,6 @@ def generate_code_for_plot(user_query: str, ddl_schema: str, df: str, error: str
 
         User request:
         \"{user_query}\"
-
-        Guidelines:
-        - Output only valid Python code for generating a plot.
-        - Do NOT include any lines with connection to database or SQL code, you have given dataframe as 'df'.
-        - The result must be directly executable in Python.
-        - If you'are asked to change something, use your previous answear and change only necessery.
-
-        Your output should be a single Python code block, nothing else.
         """
     gemini_messages = []
     for message in messages:
