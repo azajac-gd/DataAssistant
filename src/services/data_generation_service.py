@@ -1,9 +1,9 @@
 from typing import List, Dict
 import json
 from services.gemini_client import client
-from langfuse.decorators import observe
+from langfuse.decorators import observe, langfuse_context
 
-@observe()
+@observe(as_type="generation")
 def generate_data_with_gemini(ddl_schema: str, prompt: str, temperature: float) -> str:
     full_prompt = f"""
 You are a data generator. Given the following ddl schema, generate realistic and consistent sample data.
@@ -29,19 +29,28 @@ DDL schema:
 Additional context: {prompt}
 """
 
-
+    model = "gemini-2.5-flash-preview-05-20"
     response = client.models.generate_content(
-            model="gemini-2.5-flash-preview-05-20",
+            model=model,
             contents=full_prompt,
             config={"temperature": temperature}
         )
+    
+    langfuse_context.update_current_observation(
+    input=input,
+    model=model,
+    usage_details={
+          "input": response.usage_metadata.prompt_token_count,
+          "output": response.usage_metadata.candidates_token_count,
+          "total": response.usage_metadata.total_token_count
+      })
 
     output = response.text.strip()
 
     return output
 
 
-@observe()
+@observe(as_type="generation")
 def validate_generated_data(ddl_schema: str, generated_data: str):
     prompt = f"""
 You are a data validator. 
@@ -61,26 +70,44 @@ Data to validate:
 {generated_data}
 
 """
+    model = "gemini-2.0-flash"
     response = client.models.generate_content(
-        model="gemini-2.0-flash",
+        model=model,
         contents=prompt,
         config={
             "temperature": 0.0
         }
     )
+    langfuse_context.update_current_observation(
+    input=input,
+    model=model,
+    usage_details={
+          "input": response.usage_metadata.prompt_token_count,
+          "output": response.usage_metadata.candidates_token_count,
+          "total": response.usage_metadata.total_token_count
+      })
 
     return response.text
 
-@observe()
+@observe(as_type="generation")
 def generate_data_from_prompt(prompt: str, temperature: float) -> str:
+    model = "gemini-2.0-flash"
     response = client.models.generate_content(
-        model="gemini-2.0-flash",
+        model=model,
         contents=prompt,
         config={"temperature": temperature}
     )
+    langfuse_context.update_current_observation(
+    input=input,
+    model=model,
+    usage_details={
+          "input": response.usage_metadata.prompt_token_count,
+          "output": response.usage_metadata.candidates_token_count,
+          "total": response.usage_metadata.total_token_count
+      })
     return response.text
 
-@observe()
+
 def build_edit_prompt(current_data: List[Dict], edit_history: List[str], new_instruction: str, ddl_schema: str) -> str:
     json_data = json.dumps(current_data, indent=2)
     edit_steps = "\n".join([f"{i+1}. {edit}" for i, edit in enumerate(edit_history)])

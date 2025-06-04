@@ -8,7 +8,7 @@ import uuid
 import os
 import traceback
 from google.genai import types
-from langfuse.decorators import observe
+from langfuse.decorators import observe,langfuse_context 
 from dotenv import load_dotenv
 load_dotenv()
 
@@ -40,7 +40,7 @@ plot_generation_declaration = {
         }
 }
 
-@observe()
+@observe(as_type="generation")
 def generate_code_for_plot(user_query: str, ddl_schema: str, df: str, error: str, messages: str) -> str:
     if error != 'first run':
         prompt = f"""
@@ -82,14 +82,22 @@ def generate_code_for_plot(user_query: str, ddl_schema: str, df: str, error: str
                 types.Content(role=message["role"], parts=[types.Part(text=message["content"])])
             )
     gemini_messages.append(types.Content(role="user", parts=[types.Part(text=prompt)]))
-
+    model = "gemini-2.0-flash"
     response = client.models.generate_content(
-        model="gemini-2.0-flash",
+        model=model,
         contents=gemini_messages,
         config={
             "temperature": 0.0
         }
     )
+    langfuse_context.update_current_observation(
+    input=input,
+    model=model,
+    usage_details={
+          "input": response.usage_metadata.prompt_token_count,
+          "output": response.usage_metadata.candidates_token_count,
+          "total": response.usage_metadata.total_token_count
+      })
     raw = response.text.strip()
 
     if raw.startswith("```python"):
