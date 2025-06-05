@@ -22,7 +22,7 @@ def plot_generator(user_query: str, ddl_schema: str, messages:str) -> dict:
         logging.info(f"Code {plot_request}")
         plot_path, error = execute_plot(plot_request, df)
         logging.info(plot_path)
-    return plot_path
+    return plot_path, plot_request, error
 
 
 plot_generation_declaration = {
@@ -47,12 +47,6 @@ def generate_code_for_plot(user_query: str, ddl_schema: str, df: str, error: str
         You previously generated an invalid plot code with the following error: {error}
         Please correct it based on the schema: {ddl_schema}
         And user question: {user_query}
-
-        Guidelines:
-        - Output only valid Python code for generating a plot.
-        - The result must be directly executable in Python.
-
-        Your output should be a single Python code block, nothing else.
         """
     else:
         prompt = f"""

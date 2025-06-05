@@ -70,33 +70,12 @@ def show_data_generation():
                     else:
                         with st.spinner("Applying edit..."):
                             process_edit_prompt(edit_prompt, temperature, ddl_content)
-            download_all_tables()
-            if st.button("Save to PostgreSQL"):
+            if st.button("Save locally"):
                 try:
                     execute_ddl_and_save_data(ddl_content, st.session_state['generated_data'])
 
                 except Exception as e:
-                    st.error(f"Error saving to PostgreSQL: {e}")
-
-def download_all_tables():
-    zip_buffer = io.BytesIO()
-
-    with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
-        for table in st.session_state["generated_data"]:
-            table_name = table["table_name"]
-            df = pd.DataFrame(table["rows"])
-            csv_io = io.StringIO()
-            df.to_csv(csv_io, index=False)
-            zip_file.writestr(f"{table_name}.csv", csv_io.getvalue())
-
-    zip_buffer.seek(0)
-
-    st.download_button(
-        label="Download all tables",
-        data=zip_buffer,
-        file_name="generated_data.zip",
-        mime="application/zip"
-    )
+                    st.error(f"Error data saving: {e}")
 
 def show_tables(data: List[Dict]):
     col1, col2 = st.columns(2)

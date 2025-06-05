@@ -47,7 +47,7 @@ def execute_ddl_and_save_data(ddl_text: str, data_tables: List[Dict]):
         conn.commit()
         cursor.close()
         conn.close()
-        st.success("Tables created and data saved to PostgreSQL successfully!")
+        st.success("Tables created and data saved successfully!")
     except Exception as e:
         st.error(f"Error: {e}")
 

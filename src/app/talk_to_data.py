@@ -63,8 +63,10 @@ def chat_container(ddl_schema: str):
                         st.warning("Query returned no results.")
 
                 else:
-                    st.image(response)
-                    assistant_msg["plot_image"] = response
+                    image, plot_code, error = response
+                    st.image(image)
+                    assistant_msg["plot_image"] = image
+                    assistant_msg["plot_code"] = plot_code
 
                 st.session_state.messages.append(assistant_msg)
 
