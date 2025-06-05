@@ -1,6 +1,7 @@
 import streamlit as st
 import logging
 from services.chat_service import chat_response
+from services.validation_service import validate_prompt
 import base64
 import pickle
 
@@ -36,39 +37,56 @@ def chat_container(ddl_schema: str):
                 if "plot_image" in message:
                     st.image(message["plot_image"])
 
+                if "error" in message:
+                    st.error(message["error"])
+
 
     if prompt := st.chat_input("Ask a question about your data?"):
+        
         with st.chat_message("user"):
             st.markdown(prompt)
         st.session_state.messages.append({"role": "user", "content": prompt})
 
         try:
-            response = chat_response(ddl_schema, prompt, st.session_state.messages)
+            validation = validate_prompt(prompt, ddl_schema)
+            if validation != "OK":
+                assistant_msg = {
+                    "role": "assistant",
+                    "error": "Your question was rejected. Please make sure it is clear and relevant."
+                }
 
-            with st.chat_message("assistant"):
-                assistant_msg = {"role": "assistant"}
-
-                if isinstance(response, tuple) and len(response) == 2:
-                    sql_query, df = response
-
-                    st.code(sql_query, language="sql")
-                    assistant_msg["sql"] = sql_query
-
-                    if not df.empty:
-                        st.dataframe(df, use_container_width=False)
-                        df = base64.b64encode(pickle.dumps(df)).decode("utf-8")
-                        assistant_msg["df"] = df
-
-                    else:
-                        st.warning("Query returned no results.")
-
-                else:
-                    image, plot_code, error = response
-                    st.image(image)
-                    assistant_msg["plot_image"] = image
-                    assistant_msg["plot_code"] = plot_code
+                with st.chat_message("assistant"):
+                    st.error(assistant_msg["error"])
 
                 st.session_state.messages.append(assistant_msg)
+
+            else:
+                response = chat_response(ddl_schema, prompt, st.session_state.messages)
+
+                with st.chat_message("assistant"):
+                    assistant_msg = {"role": "assistant"}
+
+                    if isinstance(response, tuple) and len(response) == 2:
+                        sql_query, df = response
+
+                        st.code(sql_query, language="sql")
+                        assistant_msg["sql"] = sql_query
+
+                        if not df.empty:
+                            st.dataframe(df, use_container_width=False)
+                            df = base64.b64encode(pickle.dumps(df)).decode("utf-8")
+                            assistant_msg["df"] = df
+
+                        else:
+                            st.warning("Query returned no results.")
+
+                    else:
+                        image, plot_code, error = response
+                        st.image(image)
+                        assistant_msg["plot_image"] = image
+                        assistant_msg["plot_code"] = plot_code
+
+                    st.session_state.messages.append(assistant_msg)
 
         except Exception as e:
             st.error(f"Error: {e}")

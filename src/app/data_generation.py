@@ -33,7 +33,7 @@ def show_data_generation():
         generate_button = st.button("Generate")
 
     if generate_button:
-        validation = validate_prompt(prompt)
+        validation = validate_prompt(prompt, ddl_content)
         if validation != "OK":
             st.error(f"Prompt rejected!")
         else:
@@ -64,7 +64,7 @@ def show_data_generation():
                 edit_prompt = st.text_input("edit_prompt", placeholder="Enter quick edit instructions...", label_visibility="collapsed")
             with col2:
                 if st.button("Submit", use_container_width=True) and edit_prompt.strip():
-                    validation = validate_prompt(edit_prompt)
+                    validation = validate_prompt(edit_prompt, ddl_content)
                     if validation != "OK":
                         st.error(f"Prompt rejected!")
                     else:
